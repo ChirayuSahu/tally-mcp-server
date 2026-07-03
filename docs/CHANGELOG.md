@@ -1,5 +1,13 @@
 # Release History
 
+### Version: v7.4 [03-Jul-2026]
+
+Added:
+* Tool delete-master introduce to delete master type collection [#14](https://github.com/dhananjay1405/tally-mcp-server/issues/14)
+
+Fixed:
+* Date was being shifted by 1 day due to UTC offset. Fixed applied addressing issue [#23](https://github.com/dhananjay1405/tally-mcp-server/issues/23)
+
 ### Version: v7.3 [31-May-2026]
 
 Fixed:

@@ -18,12 +18,12 @@ Port = 9000
 
 ## Download
 Avoid cloning repository directly. Utility is available for download (with required dependencies) on below link <br>
-[https://excelkida.com/resource/tally-mcp-server-v7.3.zip](https://excelkida.com/resource/tally-mcp-server-v7.3.zip)
+[https://excelkida.com/resource/tally-mcp-server-v7.4.zip](https://excelkida.com/resource/tally-mcp-server-v7.4.zip)
 
 One-click installer **extension** for **Claude Desktop**<br>
-[https://excelkida.com/resource/tally-mcp-server-v7.3.mcpb](https://excelkida.com/resource/tally-mcp-server-v7.3.mcpb)
+[https://excelkida.com/resource/tally-mcp-server-v7.4.mcpb](https://excelkida.com/resource/tally-mcp-server-v7.4.mcpb)
 
-Last updated: version **7.3** [31-May-2026]
+Last updated: version **7.4** [03-Jul-2026]
 
 Refer docs/CHANGELOG.md for details
 
@@ -393,6 +393,19 @@ Master ledger object accepts following
 
 **Output**
 JSON result returned by import operation (success/failure details).
+
+### delete-master
+Delete one (or more) masters from Tally
+
+**Input**
+|Argument|Description|
+|--|--|
+|targetCompany (optional)|Company name (defaults to active company)|
+|collection|Type of master or collection to delete. One of: `group`, `ledger`, `vouchertype`, `unit`, `godown`, `stockgroup`, `stockitem`, `costcategory`, `costcentre`, `attendancetype`, `company`, `currency`, `gstin`, `gstclassification` |
+|name|array of name(s) of master to be deleted|
+
+**Output**
+JSON result returned by delete operation (count of deleted, skipped, etc).
 
 ### set-company
 Sets active company context in Tally Prime.

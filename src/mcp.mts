@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
-import { fetchReport, importMasters, invokeTallyAction, queryCollection, renameObjectArrayProperties } from './tally.mjs';
+import { deleteMasters, fetchReport, importMasters, invokeTallyAction, queryCollection, renameObjectArrayProperties } from './tally.mjs';
 import { cacheTable, executeSQL } from './database.mjs';
 import { lstCollectionFields, lstOptionCountryState } from './definition.mjs';
 import { utility } from './utility.mjs';
@@ -800,6 +800,59 @@ export async function registerMcpServer(): Promise<McpServer> {
   );
 
   mcpServer.registerTool(
+    'delete-master',
+    {
+      title: 'Delete Master',
+      description: `deletes a master object from selected collection in Tally Prime and returns success count of deleted records`,
+      inputSchema: {
+        targetCompany: z.string().optional().describe('optional company name. leave it blank or skip this to choose for default company. validate it using list-master tool with collection as company if specified'),
+        collection: z.enum(lstCollections).describe('target collection for deletion, validate collection and object name using list-master tool where applicable'),
+        name: z.array(z.string()).describe('list of name of that specific master object from that collection to delete, validate it using list-master tool with collection as the target collection before calling this tool')
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: true,
+        idempotentHint: true
+      }
+    },
+    async (args) => {
+      try {
+        const targetCollection = args.collection.trim();
+
+        // validate if name exists for the specified collection before making delete call to avoid unnecessary processing and load on Tally
+        let lstNames = await queryCollection(targetCollection, ['Name'], new Map<string, string>(), args.targetCompany);
+
+        // iterate through args.name and check if each name exists in lstNames, if any name is not found then return error with list of names not found, if all names are found then proceed with delete operation
+        let lstNamesNotFound: string[] = [];
+        args.name.forEach((name) => {
+          if (!lstNames.some((item) => item.Name === name)) {
+            lstNamesNotFound.push(name);
+          }
+        });
+
+        if (lstNamesNotFound.length > 0) {
+          return {
+            isError: true,
+            content: [{ type: 'text', text: `No master object found with the given name(s) in the ${targetCollection} collection: ${lstNamesNotFound.join(', ')}. Kindly validate it using list-master tool` }]
+          };
+        }
+
+        const result = await deleteMasters(targetCollection, args.name, args.targetCompany);
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result) }]
+        };
+      } catch (err) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: JSON.stringify(err) }]
+        };
+      }
+    }
+  );
+
+  mcpServer.registerTool(
     'set-company',
     {
       title: 'Set Company',
@@ -825,6 +878,8 @@ export async function registerMcpServer(): Promise<McpServer> {
 
     }
   );
+
+
 
   mcpServer.registerTool(
     'set-period',

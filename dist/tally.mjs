@@ -2,7 +2,7 @@ import http from 'node:http';
 import nunjucks from 'nunjucks';
 import { XMLParser } from 'fast-xml-parser';
 import { utility } from './utility.mjs';
-import { lstCollectionFields, lstPushXml, lstReportConfig, lstReportXml, xmlInvokeAction, xmlQueryCollection } from './definition.mjs';
+import { lstCollectionFields, lstPushXml, lstReportConfig, lstReportXml, xmlInvokeAction, xmlQueryCollection, xmlDeleteMasters } from './definition.mjs';
 const tally_port = parseInt(process.env.TALLY_PORT || '9000'); // default to 9000 XML port of Tally
 const lstPullReport = lstReportConfig;
 const nEnv = new nunjucks.Environment();
@@ -158,6 +158,25 @@ export async function importMasters(targetMaster, objMasterInput) {
     try {
         let xmlTemplate = lstPushXml.get(targetMaster) || '';
         let respContent = await sendTallyXml(xmlTemplate, objMasterInput); //send XML to Tally and get response
+        const xmlParser = new XMLParser();
+        let resultObj = xmlParser.parse(respContent);
+        let retval = resultObj['RESPONSE'];
+        return retval;
+    }
+    catch (err) {
+        throw err;
+    }
+}
+export async function deleteMasters(targetCollection, lstMaster, targetCompany) {
+    try {
+        let xmlTemplate = xmlDeleteMasters;
+        let objTemplateArgs = new Map();
+        objTemplateArgs.set('targetCollection', targetCollection);
+        objTemplateArgs.set('masters', lstMaster);
+        if (targetCompany) {
+            objTemplateArgs.set('targetCompany', targetCompany);
+        }
+        let respContent = await sendTallyXml(xmlTemplate, objTemplateArgs);
         const xmlParser = new XMLParser();
         let resultObj = xmlParser.parse(respContent);
         let retval = resultObj['RESPONSE'];

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
+import { utility } from './utility.mjs';
 
 const pg = await PGlite.create('memory://');
 
@@ -57,7 +58,7 @@ export async function cacheTable(lstColumnMetadata: Map<string, string>, data: a
                     } else if (colType === 'boolean') {
                         return typeof value === 'boolean' ? value : null;
                     } else if (colType === 'date') {
-                        return value instanceof Date ? value : null;
+                        return value instanceof Date ? utility.Date.format(value, 'YYYY-MM-DD') : null;
                     } else {
                         return value || '';
                     }

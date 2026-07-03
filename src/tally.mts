@@ -3,7 +3,7 @@ import nunjucks from 'nunjucks';
 import { XMLParser } from 'fast-xml-parser';
 import * as m from './models.mjs';
 import { utility } from './utility.mjs';
-import { lstCollectionFields, lstPushXml, lstReportConfig, lstReportXml, xmlInvokeAction, xmlQueryCollection } from './definition.mjs';
+import { lstCollectionFields, lstPushXml, lstReportConfig, lstReportXml, xmlInvokeAction, xmlQueryCollection, xmlDeleteMasters } from './definition.mjs';
 
 const tally_port = parseInt(process.env.TALLY_PORT || '9000'); // default to 9000 XML port of Tally
 const lstPullReport: m.ModelPullReportInfo[] = lstReportConfig;
@@ -187,6 +187,25 @@ export async function importMasters(targetMaster: string, objMasterInput: Map<st
     try {
         let xmlTemplate = lstPushXml.get(targetMaster) || '';
         let respContent = await sendTallyXml(xmlTemplate, objMasterInput); //send XML to Tally and get response
+        const xmlParser = new XMLParser();
+        let resultObj = xmlParser.parse(respContent);
+        let retval: m.CreateUpdateDeleteStatus = resultObj['RESPONSE'];
+        return retval;
+    } catch (err) {
+        throw err;
+    }
+}
+
+export async function deleteMasters(targetCollection: string, lstMaster: string[], targetCompany?: string): Promise<m.CreateUpdateDeleteStatus> {
+    try {
+        let xmlTemplate = xmlDeleteMasters;
+        let objTemplateArgs = new Map<string, any>();
+        objTemplateArgs.set('targetCollection', targetCollection);
+        objTemplateArgs.set('masters', lstMaster);
+        if (targetCompany) {
+            objTemplateArgs.set('targetCompany', targetCompany);
+        }
+        let respContent = await sendTallyXml(xmlTemplate, objTemplateArgs);
         const xmlParser = new XMLParser();
         let resultObj = xmlParser.parse(respContent);
         let retval: m.CreateUpdateDeleteStatus = resultObj['RESPONSE'];
