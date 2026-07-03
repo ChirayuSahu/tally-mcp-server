@@ -48,7 +48,7 @@ export async function cacheTable(lstColumnMetadata, data) {
                         return typeof value === 'boolean' ? value : null;
                     }
                     else if (colType === 'date') {
-                        return value instanceof Date ? utility.Date.format(value, 'YYYY-MM-DD') : null;
+                        return value instanceof Date ? utility.Date.format(value, 'yyyy-MM-dd') : null;
                     }
                     else {
                         return value || '';
