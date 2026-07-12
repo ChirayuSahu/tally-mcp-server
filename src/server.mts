@@ -31,7 +31,6 @@ const authPassword = process.env.PASSWORD || 'password';
 
 const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
-
 const checkAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || authHeader !== `Bearer ${authPassword}`) {
@@ -45,7 +44,7 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
-app.use('/mcp', checkAuth, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use('/mcp', async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     let transport: StreamableHTTPServerTransport;
