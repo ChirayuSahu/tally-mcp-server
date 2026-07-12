@@ -101,11 +101,15 @@ const handleMcpRequest = async (req: express.Request, res: express.Response) => 
 
   // Extract and validate token
   const token = authHeader.split(' ')[1];
-  const tokenData = accessTokens[token];
+  
+  // Allow static password bypass for simpler configurations
+  if (token !== authPassword) {
+    const tokenData = accessTokens[token];
 
-  if (!tokenData || tokenData.expires_at < Date.now()) {
-    handleUnauthorized();
-    return;
+    if (!tokenData || tokenData.expires_at < Date.now()) {
+      handleUnauthorized();
+      return;
+    }
   }
 
 
