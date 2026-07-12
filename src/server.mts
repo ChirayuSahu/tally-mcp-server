@@ -12,8 +12,15 @@ const mcpDomain = process.env.MCP_DOMAIN || 'http://localhost:3000';
 const __dirname = import.meta.dirname;
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  if (req.path === '/mcp') {
+    return next();
+  }
+  express.json()(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ extended: true })(req, res, next);
+  });
+});
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] - ${req.ip} - ${req.method} ${req.url}`);
@@ -47,7 +54,8 @@ const registeredClients: { [client_id: string]: RegisteredClient } = {};
 const authorizationCodes: { [code: string]: AuthorizationCode } = {};
 const accessTokens: { [token: string]: AccessToken } = {};
 
-const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
+const transport = new StreamableHTTPServerTransport();
+let mcpServerConnected = false;
 
 // Helper function to generate secure tokens
 const generateSecureToken = (bytes: number = 32): string => {
@@ -95,73 +103,19 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
-// Handle POST requests for client-to-server communication
-const handleMcpRequest = async (req: express.Request, res: express.Response) => {
-  // Check for existing session ID
-  const sessionId = req.headers['mcp-session-id'] as string | undefined;
-  let transport: StreamableHTTPServerTransport;
-
-  if (sessionId && transports[sessionId]) {
-    // Reuse existing transport
-    transport = transports[sessionId];
+app.use('/mcp', checkAuth, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    if (!mcpServerConnected) {
+      const mcpServer = await registerMcpServer();
+      await mcpServer.connect(transport);
+      mcpServerConnected = true;
+    }
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    console.error('Transport error:', error);
+    next(error);
   }
-  else if (!sessionId && isInitializeRequest(req.body)) {
-    // New initialization request
-    transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => crypto.randomUUID(),
-      onsessioninitialized: (sessionId) => {
-        // Store the transport by session ID
-        transports[sessionId] = transport;
-      },
-      allowedHosts: [mcpDomain],
-    });
-
-    // Clean up transport when closed
-    transport.onclose = () => {
-      if (transport.sessionId) {
-        delete transports[transport.sessionId];
-      }
-    };
-
-    const mcpServer = await registerMcpServer(); // Register the MCP server
-    await mcpServer.connect(transport); // Connect the MCP server to the transport
-  }
-  else {
-    // Invalid request
-    res.status(400).json({
-      jsonrpc: '2.0',
-      error: {
-        code: -32000,
-        message: 'Bad Request: No valid session ID provided',
-      },
-      id: null,
-    });
-    return;
-  }
-
-  // Handle the request
-  await transport.handleRequest(req, res, req.body);
-}
-
-app.post('/mcp', checkAuth, handleMcpRequest);
-
-// Reusable handler for GET and DELETE requests
-const handleSessionRequest = async (req: express.Request, res: express.Response) => {
-  const sessionId = req.headers['mcp-session-id'] as string | undefined;
-  if (!sessionId || !transports[sessionId]) {
-    res.status(400).send('Invalid or missing session ID');
-    return;
-  }
-
-  const transport = transports[sessionId];
-  await transport.handleRequest(req, res);
-};
-
-// Handle GET requests for server-to-client notifications via SSE
-app.get('/mcp', checkAuth, handleSessionRequest);
-
-// Handle DELETE requests for session termination
-app.delete('/mcp', checkAuth, handleSessionRequest);
+});
 
 const handleOAuthProtectedResource = (req: express.Request, res: express.Response) => {
   res.status(200).json({
@@ -399,4 +353,10 @@ app.post('/token', (req, res) => {
 });
 
 // Start MCP Server listener
-app.listen(mcpPort, () => console.log(`MCP Server started on port ${mcpPort}`));
+const httpServer = app.listen(mcpPort, () => console.log(`MCP Server started on port ${mcpPort}`));
+
+// Keep this above the reverse proxy's idle/keep-alive timeout (e.g. IIS ARR). Otherwise Node
+// can close a pooled connection right as the proxy reuses it, hanging the next request
+// (e.g. notifications/initialized right after initialize) until the client's own timeout fires.
+httpServer.keepAliveTimeout = 65000;
+httpServer.headersTimeout = 66000;
