@@ -12,15 +12,8 @@ const mcpDomain = process.env.MCP_DOMAIN || 'http://localhost:3000';
 const __dirname = import.meta.dirname;
 
 const app = express();
-app.use((req, res, next) => {
-  if (req.path === '/mcp') {
-    return next();
-  }
-  express.json()(req, res, (err) => {
-    if (err) return next(err);
-    express.urlencoded({ extended: true })(req, res, next);
-  });
-});
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] - ${req.ip} - ${req.method} ${req.url}`);
@@ -110,7 +103,7 @@ app.use('/mcp', checkAuth, async (req: express.Request, res: express.Response, n
       await mcpServer.connect(transport);
       mcpServerConnected = true;
     }
-    await transport.handleRequest(req, res);
+    await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error('Transport error:', error);
     next(error);
@@ -153,10 +146,10 @@ app.post('/register', (req, res) => {
   const clientId = generateSecureToken(16);
   const clientSecret = generateSecureToken(32);
   const clientName = req.body['client_name'] || 'Unnamed Client';
-  const redirectUris = req.body['redirect_uris'] || [];
+  let redirectUris = req.body['redirect_uris'] || [];
 
-  if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
-    return res.status(400).json({ error: 'redirect_uris must be a non-empty array' });
+  if (!Array.isArray(redirectUris)) {
+    redirectUris = [];
   }
 
   registeredClients[clientId] = {
