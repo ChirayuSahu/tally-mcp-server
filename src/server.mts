@@ -2,7 +2,7 @@ import path from 'node:path';
 import express from 'express';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv'
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { registerMcpServer } from './mcp.mjs'
 
@@ -43,7 +43,7 @@ const registeredClients: { [client_id: string]: RegisteredClient } = {};
 const authorizationCodes: { [code: string]: AuthorizationCode } = {};
 const accessTokens: { [token: string]: AccessToken } = {};
 
-const transports: { [sessionId: string]: SSEServerTransport } = {};
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // Helper function to generate secure tokens
 const generateSecureToken = (bytes: number = 32): string => {
@@ -91,31 +91,73 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
-app.get('/mcp', checkAuth, async (req: express.Request, res: express.Response) => {
-  // Create a new SSE transport. The endpoint provided here is where the client will send POST messages.
-  const transport = new SSEServerTransport('/message', res);
-  
-  transports[transport.sessionId] = transport;
-  
-  transport.onclose = () => {
-    delete transports[transport.sessionId];
-  };
+// Handle POST requests for client-to-server communication
+const handleMcpRequest = async (req: express.Request, res: express.Response) => {
+  // Check for existing session ID
+  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  let transport: StreamableHTTPServerTransport;
 
-  const mcpServer = await registerMcpServer();
-  await mcpServer.connect(transport);
-});
+  if (sessionId && transports[sessionId]) {
+    // Reuse existing transport
+    transport = transports[sessionId];
+  }
+  else if (!sessionId && isInitializeRequest(req.body)) {
+    // New initialization request
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => crypto.randomUUID(),
+      onsessioninitialized: (sessionId) => {
+        // Store the transport by session ID
+        transports[sessionId] = transport;
+      },
+      allowedHosts: [mcpDomain],
+    });
 
-app.post('/message', checkAuth, async (req: express.Request, res: express.Response) => {
-  const sessionId = req.query.sessionId as string;
-  const transport = transports[sessionId];
-  
-  if (!transport) {
-    res.status(404).send('Session not found');
+    // Clean up transport when closed
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        delete transports[transport.sessionId];
+      }
+    };
+
+    const mcpServer = await registerMcpServer(); // Register the MCP server
+    await mcpServer.connect(transport); // Connect the MCP server to the transport
+  }
+  else {
+    // Invalid request
+    res.status(400).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Bad Request: No valid session ID provided',
+      },
+      id: null,
+    });
     return;
   }
-  
-  await transport.handlePostMessage(req, res);
-});
+
+  // Handle the request
+  await transport.handleRequest(req, res, req.body);
+}
+
+app.post('/mcp', checkAuth, handleMcpRequest);
+
+// Reusable handler for GET and DELETE requests
+const handleSessionRequest = async (req: express.Request, res: express.Response) => {
+  const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  if (!sessionId || !transports[sessionId]) {
+    res.status(400).send('Invalid or missing session ID');
+    return;
+  }
+
+  const transport = transports[sessionId];
+  await transport.handleRequest(req, res);
+};
+
+// Handle GET requests for server-to-client notifications via SSE
+app.get('/mcp', checkAuth, handleSessionRequest);
+
+// Handle DELETE requests for session termination
+app.delete('/mcp', checkAuth, handleSessionRequest);
 
 const handleOAuthProtectedResource = (req: express.Request, res: express.Response) => {
   res.status(200).json({
