@@ -81,6 +81,7 @@ setInterval(() => {
 
 // Handle POST requests for client-to-server communication
 const handleMcpRequest = async (req: express.Request, res: express.Response) => {
+  /*
   const handleUnauthorized = () => {
     res.status(401).json({
       jsonrpc: '2.0',
@@ -111,7 +112,7 @@ const handleMcpRequest = async (req: express.Request, res: express.Response) => 
       return;
     }
   }
-
+  */
 
   // Check for existing session ID
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
