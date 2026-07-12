@@ -690,6 +690,7 @@ export async function registerMcpServer(): Promise<McpServer> {
     }
   );
 
+  /*
   mcpServer.registerTool(
     'ledger-create-update',
     {
@@ -851,7 +852,7 @@ export async function registerMcpServer(): Promise<McpServer> {
       }
     }
   );
-
+  */
   mcpServer.registerTool(
     'set-company',
     {

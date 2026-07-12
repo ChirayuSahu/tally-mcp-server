@@ -5,8 +5,8 @@ import * as m from './models.mjs';
 import { utility } from './utility.mjs';
 import { lstCollectionFields, lstPushXml, lstReportConfig, lstReportXml, xmlInvokeAction, xmlQueryCollection, xmlDeleteMasters } from './definition.mjs';
 
-const tally_host = process.env.TALLY_HOST || 'localhost'; // default to localhost
-const tally_port = parseInt(process.env.TALLY_PORT || '9000'); // default to 9000 XML port of Tally
+const getTallyHost = () => process.env.TALLY_HOST || 'localhost'; // default to localhost
+const getTallyPort = () => parseInt(process.env.TALLY_PORT || '9000'); // default to 9000 XML port of Tally
 const lstPullReport: m.ModelPullReportInfo[] = lstReportConfig;
 
 const nEnv = new nunjucks.Environment();
@@ -244,8 +244,8 @@ async function postTallyXML(xml: string): Promise<string> {
         try {
 
             let req = http.request({
-                hostname: tally_host,
-                port: tally_port,
+                hostname: getTallyHost(),
+                port: getTallyPort(),
                 path: '',
                 method: 'POST',
                 headers: {
@@ -271,7 +271,7 @@ async function postTallyXML(xml: string): Promise<string> {
             req.on('error', (reqError: NodeJS.ErrnoException) => {
                 let errorType = reqError['message'] || reqError['code'];
                 if (errorType === 'ECONNREFUSED')
-                    reject('Unable to connect to Tally. Ensure Tally is running and XML server is enabled on port ' + tally_port + ' by going to Help (F1) > Settings > Connectivity in Tally and setting Client / Server configuration, set Tally Prime is action as Server');
+                    reject('Unable to connect to Tally. Ensure Tally is running and XML server is enabled on port ' + getTallyPort() + ' by going to Help (F1) > Settings > Connectivity in Tally and setting Client / Server configuration, set Tally Prime is action as Server');
                 else
                     reject(reqError);
             });
