@@ -79,7 +79,7 @@ setInterval(() => {
 }, 60000); // Run every minute
 
 
-app.get('/sse', async (req: express.Request, res: express.Response) => {
+app.get('/mcp', async (req: express.Request, res: express.Response) => {
   // Create a new SSE transport. The endpoint provided here is where the client will send POST messages.
   const transport = new SSEServerTransport('/message', res);
   
