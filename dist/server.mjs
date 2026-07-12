@@ -41,7 +41,19 @@ setInterval(() => {
         }
     }
 }, 60000); // Run every minute
-app.get('/mcp', async (req, res) => {
+const checkAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || authHeader !== `Bearer ${authPassword}`) {
+        res.status(401).json({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Unauthorized: Invalid password' },
+            id: null
+        });
+        return;
+    }
+    next();
+};
+app.get('/mcp', checkAuth, async (req, res) => {
     // Create a new SSE transport. The endpoint provided here is where the client will send POST messages.
     const transport = new SSEServerTransport('/message', res);
     transports[transport.sessionId] = transport;
@@ -51,7 +63,7 @@ app.get('/mcp', async (req, res) => {
     const mcpServer = await registerMcpServer();
     await mcpServer.connect(transport);
 });
-app.post('/message', async (req, res) => {
+app.post('/message', checkAuth, async (req, res) => {
     const sessionId = req.query.sessionId;
     const transport = transports[sessionId];
     if (!transport) {
