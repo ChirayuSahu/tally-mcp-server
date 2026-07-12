@@ -3,5 +3,5 @@ dist/*.mjs.map
 private/
 .mcpbignore
 *.mcpb
-.env.*
+.env
 /dist
