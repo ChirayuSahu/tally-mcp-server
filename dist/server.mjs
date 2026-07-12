@@ -1,8 +1,7 @@
 import path from 'node:path';
 import express from 'express';
 import crypto from 'node:crypto';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { registerMcpServer } from './mcp.mjs';
 const mcpPort = parseInt(process.env.PORT || '3000');
 const mcpDomain = process.env.MCP_DOMAIN || 'http://localhost:3000';
@@ -42,93 +41,25 @@ setInterval(() => {
         }
     }
 }, 60000); // Run every minute
-// Handle POST requests for client-to-server communication
-const handleMcpRequest = async (req, res) => {
-    const handleUnauthorized = () => {
-        res.status(401).json({
-            jsonrpc: '2.0',
-            error: {
-                code: -32000,
-                message: 'Unauthorized: No valid authentication token provided',
-            },
-            id: null,
-        });
+app.get('/mcp', async (req, res) => {
+    // Create a new SSE transport. The endpoint provided here is where the client will send POST messages.
+    const transport = new SSEServerTransport('/message', res);
+    transports[transport.sessionId] = transport;
+    transport.onclose = () => {
+        delete transports[transport.sessionId];
     };
-    // Check for authentication header Bearer
-    const authHeader = req.headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        handleUnauthorized();
-        return;
-    }
-    // Extract and validate token
-    const token = authHeader.split(' ')[1];
-    // Allow static password bypass for simpler configurations
-    if (token !== authPassword) {
-        const tokenData = accessTokens[token];
-        if (!tokenData || tokenData.expires_at < Date.now()) {
-            handleUnauthorized();
-            return;
-        }
-    }
-    // Check for existing session ID
-    const sessionId = req.headers['mcp-session-id'];
-    let transport;
-    if (sessionId && transports[sessionId]) {
-        // Reuse existing transport
-        transport = transports[sessionId];
-    }
-    else if (!sessionId && isInitializeRequest(req.body)) {
-        // New initialization request
-        transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => crypto.randomUUID(),
-            onsessioninitialized: (sessionId) => {
-                // Store the transport by session ID
-                transports[sessionId] = transport;
-            },
-            // DNS rebinding protection is disabled by default for backwards compatibility. If you are running this server
-            // locally, make sure to set:
-            // enableDnsRebindingProtection: true,
-            allowedHosts: [mcpDomain],
-        });
-        // Clean up transport when closed
-        transport.onclose = () => {
-            if (transport.sessionId) {
-                delete transports[transport.sessionId];
-            }
-        };
-        const mcpServer = await registerMcpServer(); // Register the MCP server
-        await mcpServer.connect(transport); // Connect the MCP server to the transport
-    }
-    else {
-        // Invalid request
-        res.status(400).json({
-            jsonrpc: '2.0',
-            error: {
-                code: -32000,
-                message: 'Bad Request: No valid session ID provided',
-            },
-            id: null,
-        });
-        return;
-    }
-    // Handle the request
-    await transport.handleRequest(req, res, req.body);
-};
-app.post('/mcp', handleMcpRequest);
-// Reusable handler for GET and DELETE requests
-const handleSessionRequest = async (req, res) => {
-    const sessionId = req.headers['mcp-session-id'];
-    if (!sessionId || !transports[sessionId]) {
-        res.status(400).send('Invalid or missing session ID');
-        return;
-    }
+    const mcpServer = await registerMcpServer();
+    await mcpServer.connect(transport);
+});
+app.post('/message', async (req, res) => {
+    const sessionId = req.query.sessionId;
     const transport = transports[sessionId];
-    await transport.handleRequest(req, res);
-};
-// Handle GET requests for server-to-client notifications via SSE
-app.get('/mcp', handleSessionRequest);
-// Handle DELETE requests for session termination
-app.delete('/mcp', handleSessionRequest);
+    if (!transport) {
+        res.status(404).send('Session not found');
+        return;
+    }
+    await transport.handlePostMessage(req, res);
+});
 const handleOAuthProtectedResource = (req, res) => {
     res.status(200).json({
         resource: `${mcpDomain}/mcp`,

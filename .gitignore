@@ -4,3 +4,4 @@ private/
 .mcpbignore
 *.mcpb
 .env.*
+/dist
