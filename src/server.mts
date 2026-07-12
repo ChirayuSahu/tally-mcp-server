@@ -47,20 +47,25 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
 app.use('/mcp', async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    console.log(`[MCP Route] Method: ${req.method}, SessionID: ${sessionId || 'None'}`);
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports[sessionId]) {
+      console.log(`[MCP Route] Found existing transport for session: ${sessionId}`);
       transport = transports[sessionId];
     } else if (!sessionId) {
+      console.log(`[MCP Route] No session ID provided, creating new transport...`);
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => crypto.randomUUID(),
         onsessioninitialized: (sid) => {
+          console.log(`[MCP Route] Session initialized: ${sid}`);
           transports[sid] = transport;
         },
         allowedHosts: [mcpDomain],
       });
 
       transport.onclose = () => {
+        console.log(`[MCP Route] Transport closed for session: ${transport.sessionId}`);
         if (transport.sessionId) {
           delete transports[transport.sessionId];
         }
@@ -68,14 +73,18 @@ app.use('/mcp', async (req: express.Request, res: express.Response, next: expres
 
       const mcpServer = await registerMcpServer();
       await mcpServer.connect(transport);
+      console.log(`[MCP Route] New transport connected and server registered.`);
     } else {
+      console.error(`[MCP Route] Invalid session ID provided: ${sessionId}`);
       res.status(400).send("Invalid session ID");
       return;
     }
 
+    console.log(`[MCP Route] Handling request...`);
     await transport.handleRequest(req, res);
+    console.log(`[MCP Route] Request handled successfully.`);
   } catch (error) {
-    console.error('Transport error:', error);
+    console.error('[MCP Route] Transport error:', error);
     next(error);
   }
 });
