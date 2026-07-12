@@ -16,7 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log(`[${new Date().toISOString()}] - ${req.ip} - ${req.method} ${req.url}`);
   next();
 });
 const authPassword = process.env.PASSWORD || 'password';
