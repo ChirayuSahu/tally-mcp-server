@@ -44,7 +44,7 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
-app.use('/mcp', async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use('/mcp', checkAuth, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     console.log(`[MCP Route] Method: ${req.method}, SessionID: ${sessionId || 'None'}`);
