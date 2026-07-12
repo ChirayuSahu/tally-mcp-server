@@ -12,8 +12,15 @@ const mcpDomain = process.env.MCP_DOMAIN || 'http://localhost:3000';
 const __dirname = import.meta.dirname;
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  if (req.path === '/mcp') {
+    return next();
+  }
+  express.json()(req, res, (err) => {
+    if (err) return next(err);
+    express.urlencoded({ extended: true })(req, res, next);
+  });
+});
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] - ${req.ip} - ${req.method} ${req.url}`);
@@ -47,8 +54,7 @@ const registeredClients: { [client_id: string]: RegisteredClient } = {};
 const authorizationCodes: { [code: string]: AuthorizationCode } = {};
 const accessTokens: { [token: string]: AccessToken } = {};
 
-const transport = new StreamableHTTPServerTransport();
-let mcpServerConnected = false;
+const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // Helper function to generate secure tokens
 const generateSecureToken = (bytes: number = 32): string => {
@@ -98,12 +104,34 @@ const checkAuth = (req: express.Request, res: express.Response, next: express.Ne
 
 app.use('/mcp', checkAuth, async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
-    if (!mcpServerConnected) {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    let transport: StreamableHTTPServerTransport;
+
+    if (sessionId && transports[sessionId]) {
+      transport = transports[sessionId];
+    } else if (!sessionId) {
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => crypto.randomUUID(),
+        onsessioninitialized: (sid) => {
+          transports[sid] = transport;
+        },
+        allowedHosts: [mcpDomain],
+      });
+
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          delete transports[transport.sessionId];
+        }
+      };
+
       const mcpServer = await registerMcpServer();
       await mcpServer.connect(transport);
-      mcpServerConnected = true;
+    } else {
+      res.status(400).send("Invalid session ID");
+      return;
     }
-    await transport.handleRequest(req, res, req.body);
+
+    await transport.handleRequest(req, res);
   } catch (error) {
     console.error('Transport error:', error);
     next(error);
